@@ -23,7 +23,9 @@ scaler = sklearn.preprocessing.StandardScaler()
 regressor = sklearn.svm.SVR(C=Epsilon_Support_Vector_Regression_regularization_parameter 
 							epsilon=Epsilon_Support_Vector_Regression_epsilon,
 							verbose=verbose)
-#regressor = GradientBoostingRegressor(n_estimators=20, random_state=0)
+#regressor = GradientBoostingRegressor(n_estimators=20, random_state=seed)
+
+use_trios = True
 
 if __name__ == "__main__":
 	filename = sys.argv[1]
@@ -31,7 +33,7 @@ if __name__ == "__main__":
 #	med_svs = sys.stgv[3]
 
 	df = pd.read_csv(filename, sep='\t')
-	d['pan']
+	
 	df = df.assign(pangenie_mendelian_consistency=lambda d: d['pangenie_mendelian_consistent_trios'] / d['pangenie_considered_trios'])
 
 	# consider allele frequency computed across all genotyped samples
@@ -130,10 +132,14 @@ if __name__ == "__main__":
 		'pangenie-all_unique_kmers',
 		'pangenie-all_GQ>=200',
 		'pangenie-all_allele_freq',
-		'pangenie_mendelian_consistent_trios',
-		'pangenie_alternative_transmitted',
-		'pangenie_considered_trios',
+		'pangenie_alternative_transmitted'
 	]
+
+	if use_trios:
+		regression_features += [
+		'pangenie_mendelian_consistent_trios',
+		'pangenie_considered_trios'
+		]
 
 	variant_types = {
 		'snps': [snps, ['unfiltered', 'strict'], ['all-regions']],

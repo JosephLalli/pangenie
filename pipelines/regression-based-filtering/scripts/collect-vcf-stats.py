@@ -33,7 +33,9 @@ def compute_allele_statistics(record):
 		assert ac < 1
 	af = ac / max(1.0, float(an))
 	return AlleleStats(str(af), str(ac), str(an), str(unknown))
-
+# af = allele frequency
+# ac = alt count
+# an = number of alleles
 
 def read_uk(record):
 	return str(record.INFO['UK'])
@@ -66,7 +68,9 @@ def compute_genotype_statistics(record, qualities=None):
 						counts[q] += 1
 	genotype_stats = GenotypeStats( str(het_genotypes / max(1.0, float(total_genotypes))), str(het_genotypes), str(total_genotypes))
 	return genotype_stats, counts
-
+# genotype_stats = number of het alleles, total number of alleles
+# counts = max quality? Unclear, maybe histogram-like count of alleles at each quality level?
+# no, couns is the number of samples with quality scores above different cutoffs
 
 parser = argparse.ArgumentParser(prog='collect-vcf-stats.py', description=__doc__)
 parser.add_argument('panel', metavar='panel', help='biallelic panel variants.')
@@ -79,6 +83,7 @@ panel_reader = VCF(args.panel)
 panel_samples = panel_reader.samples
 panel_stats = {}
 
+# make dictionary of variant_id : allele stats
 for variant in panel_reader:
 	# require bi-allelic vcf with IDs
 	assert len(variant.ALT) == 1
@@ -95,12 +100,13 @@ pangenie_samples = pangenie_reader.samples
 pangenie_stats = {}
 quals = [0,200]
 
+# create dict of variant_id to variant allele stats, gt stats, "uk value", and counts
 for variant in pangenie_reader:
 	assert len(variant.ALT) == 1
 	var_id = variant.INFO['ID']
 	allele_stats = compute_allele_statistics(variant)
 	genotype_stats, counts = compute_genotype_statistics(variant, quals)
-	uk = read_uk(variant)
+	uk = read_uk(variant) # returns "UK" info
 	pangenie_stats[var_id] = [allele_stats, genotype_stats, uk, counts]
 
 sys.stderr.write('Done with unrelated.\n')
@@ -110,6 +116,7 @@ pangenie_all_reader = VCF(args.pangenie_all)
 pangenie_all_samples = pangenie_all_reader.samples
 pangenie_all_stats = {}
 
+# create dict of variant_id to variant allele stats, gt stats, "uk value", and counts
 for variant in pangenie_all_reader:
 	assert len(variant.ALT) == 1
 	var_id = variant.INFO['ID']
@@ -144,6 +151,11 @@ header = [ 	'variant_id',
 		'pangenie-all_total_genotypes',
 		'pangenie-all_unique_kmers'
 	]
+
+
+# To std out, write:
+	# tsv header of many, many different statistics
+	# write tsv lines of statistics, including qualities
 
 for q in quals:
 	header.append('pangenie-unrelated_GQ>=' + str(q))
