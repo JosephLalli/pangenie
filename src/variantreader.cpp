@@ -7,7 +7,7 @@
 #include "cereal/archives/binary.hpp"
 
 using namespace std;
-using namespace std::filesystem;
+
 
 std::string hash_filenames(std::string reference, std::string vcf) {
     return std::to_string(std::hash<std::string>{}(std::string(std::filesystem::canonical(reference)) + std::string(std::filesystem::canonical(vcf))));

@@ -1,15 +1,9 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.20)
 project(PanGenie)
 
-# cmake_minimum_required(VERSION 3.13)
-# project(TheFsProject)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# target_link_libraries(PanGenie stdc++fs)
-
-
+set (CMAKE_VERBOSE_MAKEFILE on)
 enable_testing()
 
 find_package(PkgConfig REQUIRED)
@@ -22,7 +16,7 @@ link_directories(${JELLYFISH_LIBRARY_DIRS})
 include_directories(${JELLYFISH_INCLUDE_DIRS} ${CMAKE_BINARY_DIR}/src)
 add_compile_options(${JELLYFISH_CFLAGS_OTHER})
 
-set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-long-long -Wno-unknown-pragmas -O3 -std=c++17 -lstdc++fs")
+set(CMAKE_CXX_FLAGS "-O3 -march=native -W -Wall -pedantic -fiopenmp -fma -funroll-loops")
 
 add_subdirectory(src)
 add_subdirectory(tests)
