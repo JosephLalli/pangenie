@@ -14,11 +14,11 @@ FastaReader::FastaReader(string filename) {
 void FastaReader::parse_file(string filename) {
 	ifstream file(filename);
 	if (!file.good()) {
-		throw runtime_error("FastaReader::parse_file: reference file cannot be opened.");
+		throw std::runtime_error("FastaReader::parse_file: reference file cannot be opened.");
 	}
 	string line;
 	DnaSequence* dna_seq = nullptr;
-	while (getline(file, line)) {
+	while (std::getline(file, line)) {
 		if (line.size() == 0) continue;
 		size_t start = line.find_first_not_of(" \t\r\n");
 		size_t end = line.find_last_not_of(" \t\r\n");

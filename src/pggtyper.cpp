@@ -20,8 +20,7 @@
 #include "threadpool.hpp"
 #include "pathsampler.hpp"
 
-using namespace std;
-
+using namespace ::std;
 
 bool ends_with (string const &filename, string const &ending) {
     if (filename.length() >= ending.length()) {
@@ -63,14 +62,14 @@ void prepare_unique_kmers(string chromosome, KmerCounter* genomic_kmer_counts, K
 	Timer timer;
 	UniqueKmerComputer kmer_computer(genomic_kmer_counts, read_kmer_counts, variant_reader, chromosome, kmer_coverage);
 	std::vector<UniqueKmers*> unique_kmers;
-    kmer_computer.compute_unique_kmers(&unique_kmers, probs);
+	kmer_computer.compute_unique_kmers(&unique_kmers, probs);
 	// store the results
 	{
 		lock_guard<mutex> lock_kmers (unique_kmers_map->kmers_mutex);
 		unique_kmers_map->unique_kmers.insert(pair<string, vector<UniqueKmers*>> (chromosome, move(unique_kmers)));
 	}
 	// store runtime
-    lock_guard<mutex> lock_kmers (unique_kmers_map->kmers_mutex);
+	lock_guard<mutex> lock_kmers (unique_kmers_map->kmers_mutex);
 	unique_kmers_map->runtimes.insert(pair<string, double>(chromosome, timer.get_total_time()));
 }
 
@@ -131,8 +130,11 @@ int main (int argc, char* argv[])
 	string readfile = "";
 	string reffile = "";
 	string vcffile = "";
-    size_t kmersize = 31;
+	string segfile = "";
+	size_t kmersize = 31;
 	string outname = "result";
+	string segment_file = outname + "_path_segments.fasta";
+	string pangenome_file = outname + ".pangenie";
 	string sample_name = "sample";
 	size_t nr_jellyfish_threads = 1;
 	size_t nr_core_threads = 1;
@@ -143,16 +145,17 @@ int main (int argc, char* argv[])
 	bool count_only_graph = true;
 	bool ignore_imputed = false;
 	bool add_reference = true;
-	bool build_index = false;
-    size_t sampling_size = 0;
+	bool save_pangenome = false;
+	size_t sampling_size = 0;
 	uint64_t hash_size = 3000000000;
 
 	// parse the command line arguments
 	CommandLineParser argument_parser;
 	argument_parser.add_command("PanGenie [options] -i <reads.fa/fq> -r <reference.fa> -v <variants.vcf>");
 	argument_parser.add_mandatory_argument('i', "sequencing reads in FASTA/FASTQ format or Jellyfish database in jf format. NOTE: INPUT FASTA/Q FILE MUST NOT BE COMPRESSED.");
-	argument_parser.add_mandatory_argument('r', "reference genome in FASTA format. NOTE: INPUT FASTA FILE MUST NOT BE COMPRESSED.");
-	argument_parser.add_mandatory_argument('v', "variants in VCF format. NOTE: INPUT VCF FILE MUST NOT BE COMPRESSED.");
+	argument_parser.add_optional_argument('r', "", "reference genome in FASTA format. NOTE: INPUT FASTA FILE MUST NOT BE COMPRESSED.");
+	argument_parser.add_mandatory_argument('v', "reference pangenome graph provided in VCF format or pangenie format. NOTE: INPUT VCF FILE MUST NOT BE COMPRESSED.");
+	argument_parser.add_optional_argument('q', "", "previously generated FASTA file of unique kmers in genome");
 	argument_parser.add_optional_argument('o', "result", "prefix of the output files. NOTE: the given path must not include non-existent folders.");
 	argument_parser.add_optional_argument('k', "31", "kmer size");
 	argument_parser.add_optional_argument('s', "sample", "name of the sample (will be used in the output VCFs)");
@@ -165,10 +168,9 @@ int main (int argc, char* argv[])
 	argument_parser.add_flag_argument('c', "count all read kmers instead of only those located in graph.");
 	argument_parser.add_flag_argument('u', "output genotype ./. for variants not covered by any unique kmers.");
 	argument_parser.add_flag_argument('d', "do not add reference as additional path.");
+	argument_parser.add_flag_argument('x', "save processed reference pangenome as a .pangenie file for future use.");
 //	argument_parser.add_optional_argument('a', "0", "sample subsets of paths of this size.");
 	argument_parser.add_optional_argument('e', "3000000000", "size of hash used by jellyfish.");
-    argument_parser.add_flag_argument('B', "Build index but don't run PanGenie");
-    argument_parser.add_flag_argument('D', "debug");
 
 	try {
 		argument_parser.parse(argc, argv);
@@ -182,14 +184,18 @@ int main (int argc, char* argv[])
 	readfile = argument_parser.get_argument('i');
 	reffile = argument_parser.get_argument('r');
 	vcffile = argument_parser.get_argument('v');
+	segfile = argument_parser.get_argument('q');
 	kmersize = stoi(argument_parser.get_argument('k'));
 	outname = argument_parser.get_argument('o');
+	pangenome_file = outname+".pangenie";
+	segment_file = outname + "_path_segments.fasta";
 	sample_name = argument_parser.get_argument('s');
 	nr_jellyfish_threads = stoi(argument_parser.get_argument('j'));
 	nr_core_threads = stoi(argument_parser.get_argument('t'));
-	
+
 	bool genotyping_flag = argument_parser.get_flag('g');
 	bool phasing_flag = argument_parser.get_flag('p');
+	save_pangenome = argument_parser.get_flag('p');
 	
 	if (genotyping_flag && phasing_flag) {
 		only_genotyping = false;
@@ -200,12 +206,36 @@ int main (int argc, char* argv[])
 		only_phasing = true;
 	}
 
+	// check if input files exist and are uncompressed
+	check_input_file(readfile);
+	check_input_file(reffile);
+	check_input_file(vcffile);
+
+	bool gave_jellyfish_input = readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf");
+	bool gave_pangenie_input = vcffile.substr(std::max(9, (int) vcffile.size())-9) == std::string(".pangenie");
+	bool gave_vcf = vcffile.substr(std::max(4, (int) readfile.size())-4) == std::string(".vcf");
+	bool gave_ref_fasta = reffile=="";
+	bool gave_segfile = segfile=="";
+	
+	if (!gave_vcf & !gave_pangenie_input){
+		cerr << "No reference genomes provided; please provide either processed .pangenie reference pangenome or a reference pangenome vcf." << endl;
+		return 1;
+	} else if (!gave_jellyfish_input & !(gave_ref_fasta | gave_segfile)) {
+		cerr << "Pangenie needs a list of reference kmers to search for in your reads." << endl;
+		cerr << "Please provide either:" << endl;
+		cerr << "    1) A fasta file of the reference genome to which the other pangenome references were aligned." << endl;
+		cerr << "    2) A previously produced fasta file of kmers via (-q)." << endl;
+		cerr << "    3) A .jf input file, which obviates the need for this reference." << endl;
+		return 1;
+	}
+
+
 //	effective_N = stold(argument_parser.get_argument('n'));
 //	regularization = stold(argument_parser.get_argument('m'));
 	count_only_graph = !argument_parser.get_flag('c');
 	ignore_imputed = argument_parser.get_flag('u');
 	add_reference = !argument_parser.get_flag('d');
-    build_index = argument_parser.get_flag('B');
+	save_pangenome = !argument_parser.get_flag('x');
 //	sampling_size = stoi(argument_parser.get_argument('a'));
 	istringstream iss(argument_parser.get_argument('e'));
 	iss >> hash_size;
@@ -213,34 +243,30 @@ int main (int argc, char* argv[])
 	// print info
 	cerr << "Files and parameters used:" << endl;
 	argument_parser.info();
-    VariantReader variant_reader;
-    vector<string> chromosomes;
-
-    const std::string REF_VCF_HASH_NAME = hash_filenames(reffile,vcffile);
-    std::cout<<"Using file hash of " << REF_VCF_HASH_NAME << std::endl;
-    //string segment_file = "pangenie.debug.fasta"; //"pangenie."+REF_VCF_HASH_NAME + ".path_segments.fasta";
-    string segment_file = "pangenie."+REF_VCF_HASH_NAME + ".path_segments.fasta";
-    //string segment_file = outname + "_path_segments.fasta";
-    
-    check_input_file(vcffile);
-    check_input_file(reffile);
-
-    if (build_index) {
-    // check if input files exist and are uncompressed
 
 	// read allele sequences and unitigs inbetween, write them into file
-	cerr << "Determine allele sequences ..." << endl;
-	VariantReader variant_reader2(vcffile, reffile, kmersize, add_reference, sample_name);
+	cerr << "Loading pangenome ..." << endl;
+	VariantReader variant_reader;
+	if (gave_pangenie_input){
+		variant_reader.Load(vcffile);
+	} else {
+		VariantReader variant_reader (vcffile, reffile, kmersize, add_reference, sample_name);
+	} 
 	
+	if (save_pangenome){
+		variant_reader.Store(pangenome_file);
+		std::cout << "Saved pangenome to " + pangenome_file << std::endl;
+	}
+
 	// TODO: only for analysis
 	struct rusage r_usage00;
 	getrusage(RUSAGE_SELF, &r_usage00);
 	cerr << "#### Memory usage until now: " << (r_usage00.ru_maxrss / 1E6) << " GB ####" << endl;
 	
-	cerr << "Write path segments to file: " << segment_file << " ..." << endl;
-	variant_reader2.write_path_segments(segment_file);
+
 	// determine chromosomes present in VCF
-	variant_reader2.get_chromosomes(&chromosomes);
+	vector<string> chromosomes;
+	variant_reader.get_chromosomes(&chromosomes);
 	cerr << "Found " << chromosomes.size() << " chromosome(s) in the VCF." << endl;
 
 	// TODO: only for analysis
@@ -249,23 +275,6 @@ int main (int argc, char* argv[])
 	cerr << "#### Memory usage until now: " << (r_usage0.ru_maxrss / 1E6) << " GB ####" << endl;
 
 	time_preprocessing = timer.get_interval_time();
-    variant_reader2.Store();
-    std::cout << "stored" <<std::endl;
-    return 0;
-    }
-    else {
-    if (!argument_parser.get_flag('D')) {
-    readfile = argument_parser.get_argument('i');
-    check_input_file(readfile);
-    std::cout << "LOADING previous" <<std::endl;
-   
-    variant_reader.Load(REF_VCF_HASH_NAME);
-    variant_reader.fasta_reader.parse_file(reffile);
-    variant_reader.get_chromosomes(&chromosomes);
-    variant_reader.sample = sample_name;
-    }
-    }
-    
 
 	// UniqueKmers for each chromosome
 	UniqueKmersMap unique_kmers_list;
@@ -274,15 +283,25 @@ int main (int argc, char* argv[])
 	{
 		KmerCounter* read_kmer_counts = nullptr;
 		// determine kmer copynumbers in reads
-		if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
+		if (gave_jellyfish_input) {
 			cerr << "Read pre-computed read kmer counts ..." << endl;
 			jellyfish::mer_dna::k(kmersize);
 			read_kmer_counts = new JellyfishReader(readfile, kmersize);
 		} else {
+			// If not providing .jf file, will need path segments file to count kmers.
+			if (segfile == "None") {
+				cerr << "Write path segments to file: " << segment_file << " ..." << endl;
+				variant_reader.write_path_segments(segment_file);
+			} else {
+				// if pregenerated segfile is provided, will not reuse
+				check_input_file(segfile);
+				segment_file = segfile;
+			}
+
 			cerr << "Count kmers in reads ..." << endl;
 			if (count_only_graph) {
 				read_kmer_counts = new JellyfishCounter(readfile, segment_file, kmersize, nr_jellyfish_threads, hash_size);
-            } else {
+			} else {
 				read_kmer_counts = new JellyfishCounter(readfile, kmersize, nr_jellyfish_threads, hash_size);
 			}
 		}
@@ -298,19 +317,19 @@ int main (int argc, char* argv[])
 		struct rusage r_usage1;
 		getrusage(RUSAGE_SELF, &r_usage1);
 		cerr << "#### Memory usage until now: " << (r_usage1.ru_maxrss / 1E6) << " GB ####" << endl;
-		
-        // prepare output files
+
+		// prepare output files
 		if (! only_phasing) variant_reader.open_genotyping_outfile(outname + "_genotyping.vcf");
 		if (! only_genotyping) variant_reader.open_phasing_outfile(outname + "_phasing.vcf");
 
 		time_kmer_counting = timer.get_interval_time();
-        
+
 		cerr << "Determine unique kmers ..." << endl;
 		// determine number of cores to use
 		size_t available_threads_uk = min(thread::hardware_concurrency(), (unsigned int) chromosomes.size());
 		size_t nr_cores_uk = min(nr_core_threads, available_threads_uk);
 		if (nr_cores_uk < nr_core_threads) {
-			cerr << "Warning: using " << nr_cores_uk << " cores for determining unique kmers." << endl;
+			cerr << "Warning: using " << nr_cores_uk << " for determining unique kmers." << endl;
 		}
 
 		// precompute probabilities
@@ -343,8 +362,8 @@ int main (int argc, char* argv[])
 	struct rusage r_usage3;
 	getrusage(RUSAGE_SELF, &r_usage3);
 	cerr << "#### Memory usage until now: " << (r_usage3.ru_maxrss / 1E6) << " GB ####" << endl;
-	
-    // prepare subsets of paths to run on
+
+	// prepare subsets of paths to run on
 	unsigned short nr_paths = variant_reader.nr_of_paths();
 	// TODO: for too large panels, print waring
 	if (nr_paths > 200) cerr << "Warning: panel is large and PanGenie might take a long time genotyping. Try reducing the panel size prior to genotyping." << endl;

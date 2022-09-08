@@ -12,6 +12,7 @@
 #include "variant.hpp"
 #include "genotypingresult.hpp"
 #include "uniquekmers.hpp"
+#include "dnasequence.hpp"
 #include <functional>
 #include <filesystem>
 
@@ -45,9 +46,8 @@ std::string hash_filenames(std::string reference, std::string vcf);
 
 class VariantReader {
 public:
-	std::string sample;
     VariantReader() = default;
-	VariantReader (std::string filename, std::string reference_filename, size_t kmer_size, bool add_reference, std::string sample = "sample");
+	VariantReader(std::string filename, std::string reference_filename, size_t kmer_size, bool add_reference, std::string sample = "sample");
 	/**  writes all path segments (allele sequences + reference sequences in between)
 	*    to the given file.
 	**/
@@ -68,17 +68,22 @@ public:
 	size_t nr_of_paths() const;
 	void get_left_overhang(std::string chromosome, size_t index, size_t length, DnaSequence& result) const;
 	void get_right_overhang(std::string chromosome, size_t index, size_t length, DnaSequence& result) const;
-    void Store() const;
+    void Store(std::string filename) const;
     void Load(std::string name);
+	std::string sample;
 
 private:
     friend cereal::access;
+	template<class Archive>
+	void serialize(Archive & archive) {
+    	archive(kmer_size, nr_paths, nr_variants, add_reference, sample, variants_per_chromosome, variant_ids); 
+    }
+
     std::string REF_VCF_HASH_NAME;
 	size_t kmer_size;
 	size_t nr_paths;
 	size_t nr_variants;
 	bool add_reference;
-	//std::string sample;
 	std::ofstream genotyping_outfile;
 	std::ofstream phasing_outfile;
 	bool genotyping_outfile_open;
@@ -88,12 +93,6 @@ private:
 	void add_variant_cluster(std::string& chromosome, std::vector<Variant>* cluster);
 	void insert_ids(std::string& chromosome, std::vector<DnaSequence>& alleles, std::vector<std::string>& variant_ids, bool reference_added);
 	std::string get_ids(std::string chromosome, std::vector<std::string>& alleles, size_t variant_index, bool reference_added);
-	
-	template<class Archive>
-	void serialize(Archive & archive) {
-    archive(kmer_size, nr_paths, nr_variants, add_reference, sample, variants_per_chromosome, variant_ids); 
-    }
-
 };
 
 #endif // VARIANT_READER_HPP

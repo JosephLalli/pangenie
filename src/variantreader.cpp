@@ -29,8 +29,8 @@ void parse_line(vector<string>& result, string line, char sep) {
 	}
 }
 
-void VariantReader::Store() const {
-  std::ofstream os("pangenie."+this->REF_VCF_HASH_NAME + ".cereal");
+void VariantReader::Store(std::string filename) const {
+  std::ofstream os(filename + ".cereal");
   try {
     cereal::BinaryOutputArchive archive(os);
     archive(*this);
@@ -39,9 +39,10 @@ void VariantReader::Store() const {
         "[raven::Graph::Store] error: unable to store archive");
   }
 }
+
 void VariantReader::Load(std::string name) {
-  std::cout<< "attempting to read name: " << "pangenie."+name+".cereal" << std::endl;
-  std::ifstream is("pangenie."+name+".cereal");
+  std::cout<< "attempting to read name: " << name << std::endl;
+  std::ifstream is(name);
   try {
     cereal::BinaryInputArchive archive(is);
     archive(*this);
@@ -53,6 +54,7 @@ void VariantReader::Load(std::string name) {
 
 void VariantReader::insert_ids(string& chromosome, vector<DnaSequence>& alleles, vector<string>& variant_ids, bool reference_added) {
 	vector<unsigned char> index = construct_index(alleles, reference_added);
+	assert(index.size() < 256);
 	// insert IDs in the lex. order of their corresponding alleles
 	vector<string> sorted_ids;
 	for (auto id : index) {
@@ -63,6 +65,7 @@ void VariantReader::insert_ids(string& chromosome, vector<DnaSequence>& alleles,
 
 string VariantReader::get_ids(string chromosome, vector<string>& alleles, size_t variant_index, bool reference_added) {
 	vector<unsigned char> index = construct_index(alleles, reference_added);
+	assert(index.size() < 256);
 	vector<string> sorted_ids(index.size());
 	for (unsigned char i = 0; i < index.size(); ++i) {
 		sorted_ids[index[i]] = this->variant_ids.at(chromosome).at(variant_index)[i];
@@ -121,11 +124,11 @@ VariantReader::VariantReader(string filename, string reference_filename, size_t 
 	if (!file.good()) {
 		throw runtime_error("VariantReader::VariantReader: input VCF file cannot be opened.");
 	}
-    //
+	
     REF_VCF_HASH_NAME = hash_filenames(reference_filename,filename);
 
 	string line;
-    string previous_chrom("");
+	string previous_chrom("");
 	size_t previous_end_pos = 0;
 	map<unsigned int, string> fields = { {0, "#CHROM"}, {1, "POS"}, {2, "ID"}, {3, "REF"}, {4, "ALT"}, {5, "QUAL"}, {6, "FILTER"}, {7, "INFO"}, {8, "FORMAT"} };
 	vector<Variant> variant_cluster;
@@ -197,6 +200,11 @@ VariantReader::VariantReader(string filename, string reference_filename, size_t 
 		}
 		parse_line(alleles, tokens[4], ',');
 
+		// currently, number of alleles is limited to 256
+		if (alleles.size() > 255) {
+			throw runtime_error("VariantReader: number of alternative alleles is limited to 254 in current implementation. Make sure the VCF contains only alternative alleles covered by at least one of the haplotypes.");
+		}
+
 		// TODO: handle cases where variant is less than kmersize from start or end of the chromosome
 		if ( (current_start_pos < (kmer_size*2) ) || ( (current_end_pos + (kmer_size*2)) > this->fasta_reader.get_size_of(current_chrom)) ) {
 			cerr << "VariantReader: skip variant at " << current_chrom << ":" << current_start_pos << " since variant is less than 2 * kmer size from start or end of chromosome. " << endl;
@@ -212,11 +220,18 @@ VariantReader::VariantReader(string filename, string reference_filename, size_t 
 			this->variant_ids[current_chrom].push_back(vector<string>());
 		}
 
+		// make sure that there are at most 255 paths (including reference path in case it is requested)
+		if (this->nr_paths > 255) {
+			throw runtime_error("VariantReader: number of paths is limited to 254 in current implementation.");
+		}
+
+
 		// construct paths
 		vector<unsigned char> paths = {};
 		if (add_reference) paths.push_back((unsigned char) 0);
 		unsigned char undefined_index = alleles.size();
 		string undefined_allele = "N";
+
 		for (size_t i = 9; i < tokens.size(); ++i) {
 			// make sure all genotypes are phased
 			if (tokens[i].find('/') != string::npos) {
@@ -230,14 +245,19 @@ VariantReader::VariantReader(string filename, string reference_filename, size_t 
 			for (string& s : p){
 				// handle unknown genotypes '.'
 				if (s == ".") {
-//					cerr << "Found undefined allele at position " << current_chrom << ":" << current_start_pos << endl;
 					// add "NNN" allele to the list of alleles
 					parse_line(alleles, undefined_allele, ',');
 					paths.push_back(undefined_index);
+					assert(undefined_index < 255);
 					undefined_index += 1;
 					undefined_allele += "N";
 				} else {
-					paths.push_back( (unsigned char) atoi(s.c_str()));
+					unsigned int p_index = atoi(s.c_str());
+					if (p_index >= alleles.size()) {
+						throw runtime_error("VariantReader::VariantReader: invalid genotype in VCF.");
+					}
+					assert(p_index < 255);
+					paths.push_back( (unsigned char) p_index);
 				}
 			}
 		}
@@ -266,12 +286,15 @@ size_t VariantReader::get_kmer_size() const {
 void VariantReader::write_path_segments(std::string filename) const {
 	ofstream outfile;
 	outfile.open(filename);
+	if (!outfile.good()) {
+		stringstream ss;
+		ss << "VariantReader::write_path_segments: File " << filename << " cannot be created. Note that the filename must not contain non-existing directories." << endl;
+		throw runtime_error(ss.str());
+	}
 	// make sure to capture all chromosomes in the reference (including such for which no variants are given)
 	vector<string> chromosome_names;
 	this->fasta_reader.get_sequence_names(chromosome_names);
-    
-
-    for (auto element : chromosome_names) {
+	for (auto element : chromosome_names) {
 		size_t prev_end = 0;
 		// check if chromosome was present in VCF and write allele sequences in this case
 		auto it = this->variants_per_chromosome.find(element);
@@ -296,7 +319,7 @@ void VariantReader::write_path_segments(std::string filename) const {
 		size_t chr_len = this->fasta_reader.get_size_of(element);
 		string ref_segment;
 		this->fasta_reader.get_subsequence(element, prev_end, chr_len, ref_segment);
-        outfile << ref_segment << endl;
+		outfile << ref_segment << endl;
 	}
 	outfile.close();
 }
@@ -364,7 +387,7 @@ string get_date() {
 void VariantReader::open_genotyping_outfile(string filename) {
 	this->genotyping_outfile.open(filename);
 	if (! this->genotyping_outfile.is_open()) {
-		throw runtime_error("VariantReader::open_genotyping_outfile: genotyping output file cannot be opened.");
+		throw runtime_error("VariantReader::open_genotyping_outfile: genotyping output file cannot be opened. Note that the filename must not contain non-existing directories.");
 	}
 
 	this->genotyping_outfile_open = true;
