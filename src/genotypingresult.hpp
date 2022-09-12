@@ -1,11 +1,24 @@
 #ifndef GENOTYPINGRESULT_HPP
 #define GENOTYPINGRESULT_HPP
+// #ifndef RESULT
+// #define RESULT
 
 #include <map>
 #include <utility>
 #include <iostream>
 #include <vector>
 
+#include <mutex>
+// #include <iostream>
+#include <sstream>
+#include <sys/resource.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <mutex>
+#include <thread>
+#include <algorithm>
+#include <fstream>
+#include <stdexcept>
 /** Represents the genotyping/phasing result of a position. **/
 
 class GenotypingResult {
@@ -49,4 +62,12 @@ private:
 	unsigned char haplotype_1;
 	unsigned char haplotype_2;
 };
-#endif // GENOTYPINGRESULT_HPP
+
+struct Results {
+	std::mutex result_mutex;
+	std::map<std::string, std::vector<GenotypingResult>> result;
+	std::map<std::string, double> runtimes;
+};
+
+#endif /* Result */
+// #endif // GENOTYPINGRESULT_HPP

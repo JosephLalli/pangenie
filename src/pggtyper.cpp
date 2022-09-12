@@ -22,7 +22,7 @@
 
 using namespace ::std;
 
-bool ends_with (string const &filename, string const &ending) {
+bool file_suffix_is (string const &filename, string const &ending) {
     if (filename.length() >= ending.length()) {
         return (0 == filename.compare (filename.length() - ending.length(), ending.length(), ending));
     } else {
@@ -39,24 +39,13 @@ void check_input_file(string &filename) {
 		throw runtime_error(ss.str());
 	}
 	// make sure file is not compressed
-	if (ends_with(filename, ".gz")) {
+	if (file_suffix_is(filename, ".gz")) {
 		stringstream ss;
 		ss << "File " << filename << " seems to be gzip-compressed. PanGenie requires an uncompressed file." << endl;
 		throw runtime_error(ss.str());
 	}
 }
 
-struct UniqueKmersMap {
-	mutex kmers_mutex;
-	map<string, vector<UniqueKmers*>> unique_kmers;
-	map<string, double> runtimes;
-};
-
-struct Results {
-	mutex result_mutex;
-	map<string, vector<GenotypingResult>> result;
-	map<string, double> runtimes;
-};
 
 void prepare_unique_kmers(string chromosome, KmerCounter* genomic_kmer_counts, KmerCounter* read_kmer_counts, VariantReader* variant_reader, ProbabilityTable* probs, UniqueKmersMap* unique_kmers_map, size_t kmer_coverage) {
 	Timer timer;
@@ -195,7 +184,6 @@ int main (int argc, char* argv[])
 
 	bool genotyping_flag = argument_parser.get_flag('g');
 	bool phasing_flag = argument_parser.get_flag('p');
-	save_pangenome = argument_parser.get_flag('p');
 	
 	if (genotyping_flag && phasing_flag) {
 		only_genotyping = false;
@@ -208,19 +196,25 @@ int main (int argc, char* argv[])
 
 	// check if input files exist and are uncompressed
 	check_input_file(readfile);
-	check_input_file(reffile);
+    check_input_file(reffile);
 	check_input_file(vcffile);
 
-	bool gave_jellyfish_input = readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf");
-	bool gave_pangenie_input = vcffile.substr(std::max(9, (int) vcffile.size())-9) == std::string(".pangenie");
-	bool gave_vcf = vcffile.substr(std::max(4, (int) readfile.size())-4) == std::string(".vcf");
+	bool gave_jellyfish_input = file_suffix_is(readfile, ".jf");
+	bool gave_pangenie_input = file_suffix_is(vcffile, ".pangenie");
+	bool gave_vcf = file_suffix_is(vcffile, ".vcf");
 	bool gave_ref_fasta = reffile=="";
 	bool gave_segfile = segfile=="";
-	
-	if (!gave_vcf & !gave_pangenie_input){
+
+	printf("gave_jellyfish_input: %d\n", gave_jellyfish_input);
+	printf("gave_pangenie_input: %d\n", gave_pangenie_input);
+	printf("gave_vcf: %d\n", gave_vcf);
+	printf("gave_ref_fasta: %d\n", gave_ref_fasta);
+	printf("gave_segfile: %d\n", gave_segfile);
+
+	if (!gave_vcf && !gave_pangenie_input){
 		cerr << "No reference genomes provided; please provide either processed .pangenie reference pangenome or a reference pangenome vcf." << endl;
 		return 1;
-	} else if (!gave_jellyfish_input & !(gave_ref_fasta | gave_segfile)) {
+	} else if (!gave_jellyfish_input && !(gave_ref_fasta || gave_segfile)) {
 		cerr << "Pangenie needs a list of reference kmers to search for in your reads." << endl;
 		cerr << "Please provide either:" << endl;
 		cerr << "    1) A fasta file of the reference genome to which the other pangenome references were aligned." << endl;
@@ -243,18 +237,20 @@ int main (int argc, char* argv[])
 	// print info
 	cerr << "Files and parameters used:" << endl;
 	argument_parser.info();
-
+	VariantReader variant_reader;
 	// read allele sequences and unitigs inbetween, write them into file
 	cerr << "Loading pangenome ..." << endl;
-	VariantReader variant_reader;
 	if (gave_pangenie_input){
-		variant_reader.Load(vcffile);
+		cerr << "Loading pangenome from preprocessed " + vcffile + "..." << endl;
+		VariantReader variant_reader2 (vcffile);
+		variant_reader = variant_reader2;
 	} else {
-		VariantReader variant_reader (vcffile, reffile, kmersize, add_reference, sample_name);
-	} 
-	
+		cerr << "Loading pangenome from " + vcffile + "..." << endl;
+		VariantReader variant_reader2 (vcffile, reffile, kmersize, add_reference, sample_name);
+		variant_reader = variant_reader2;
+	}
+
 	if (save_pangenome){
-		variant_reader.Store(pangenome_file);
 		std::cout << "Saved pangenome to " + pangenome_file << std::endl;
 	}
 
@@ -263,6 +259,8 @@ int main (int argc, char* argv[])
 	getrusage(RUSAGE_SELF, &r_usage00);
 	cerr << "#### Memory usage until now: " << (r_usage00.ru_maxrss / 1E6) << " GB ####" << endl;
 	
+	cerr << "Write path segments to file: " << segment_file << " ..." << endl;
+	variant_reader.write_path_segments(segment_file);
 
 	// determine chromosomes present in VCF
 	vector<string> chromosomes;
@@ -288,15 +286,15 @@ int main (int argc, char* argv[])
 			jellyfish::mer_dna::k(kmersize);
 			read_kmer_counts = new JellyfishReader(readfile, kmersize);
 		} else {
-			// If not providing .jf file, will need path segments file to count kmers.
-			if (segfile == "None") {
-				cerr << "Write path segments to file: " << segment_file << " ..." << endl;
-				variant_reader.write_path_segments(segment_file);
-			} else {
-				// if pregenerated segfile is provided, will not reuse
-				check_input_file(segfile);
-				segment_file = segfile;
-			}
+			// // If not providing .jf file, will need path segments file to count kmers.
+			// if (gave_segfile) {
+			// 	// if pregenerated segfile is provided, will not reuse
+			// 	check_input_file(segfile);
+			// 	segment_file = segfile;
+			// } else {
+			// 	cerr << "Write path segments to file: " << segment_file << " ..." << endl;
+			// 	variant_reader.write_path_segments(segment_file);
+			// }
 
 			cerr << "Count kmers in reads ..." << endl;
 			if (count_only_graph) {
@@ -317,10 +315,6 @@ int main (int argc, char* argv[])
 		struct rusage r_usage1;
 		getrusage(RUSAGE_SELF, &r_usage1);
 		cerr << "#### Memory usage until now: " << (r_usage1.ru_maxrss / 1E6) << " GB ####" << endl;
-
-		// prepare output files
-		if (! only_phasing) variant_reader.open_genotyping_outfile(outname + "_genotyping.vcf");
-		if (! only_genotyping) variant_reader.open_phasing_outfile(outname + "_phasing.vcf");
 
 		time_kmer_counting = timer.get_interval_time();
 
@@ -440,24 +434,10 @@ int main (int argc, char* argv[])
 
 	timer.get_interval_time();
 
-	// output VCF
-	cerr << "Write results to VCF ..." << endl;
 	if (!(only_genotyping && only_phasing)) assert (results.result.size() == chromosomes.size());
-	// write VCF
-	for (auto it = results.result.begin(); it != results.result.end(); ++it) {
-		if (!only_phasing) {
-			// output genotyping results
-			
-			variant_reader.write_genotypes_of(it->first, it->second, &unique_kmers_list.unique_kmers[it->first], ignore_imputed);
-		}
-		if (!only_genotyping) {
-			// output phasing results
-			variant_reader.write_phasing_of(it->first, it->second, &unique_kmers_list.unique_kmers[it->first], ignore_imputed);
-		}
-	}
+	if (! only_phasing) variant_reader.write_outfiles(results, unique_kmers_list, outname + "_genotyping.vcf", outname + "_phasing.vcf", only_genotyping, only_phasing, ignore_imputed);
+	// if (! only_genotyping) variant_reader.write_phasing_outfile(results,);
 
-	if (! only_phasing) variant_reader.close_genotyping_outfile();
-	if (! only_genotyping) variant_reader.close_phasing_outfile();
 
 	time_writing = timer.get_interval_time();
 	time_total = timer.get_total_time();

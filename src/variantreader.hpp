@@ -47,6 +47,7 @@ std::string hash_filenames(std::string reference, std::string vcf);
 class VariantReader {
 public:
     VariantReader() = default;
+	VariantReader(std::string filename);
 	VariantReader(std::string filename, std::string reference_filename, size_t kmer_size, bool add_reference, std::string sample = "sample");
 	/**  writes all path segments (allele sequences + reference sequences in between)
 	*    to the given file.
@@ -58,18 +59,17 @@ public:
 	size_t size_of(std::string chromosome) const;
 	const Variant& get_variant(std::string chromosome, size_t index) const;
 	const std::vector<Variant>& get_variants_on_chromosome(std::string chromosome) const;
-	void open_genotyping_outfile(std::string outfile_name);
-	void open_phasing_outfile(std::string outfile_name);
-	void write_genotypes_of(std::string chromosome, const std::vector<GenotypingResult>& genotyping_result, std::vector<UniqueKmers*>* unique_kmers, bool ignore_imputed = false);
-	void write_phasing_of(std::string chromosome, const std::vector<GenotypingResult>& genotyping_result, std::vector<UniqueKmers*>* unique_kmers, bool ignore_imputed = false);
-	void close_genotyping_outfile();
-	void close_phasing_outfile();
-	size_t nr_of_genomic_kmers() const;
+	void write_outfiles(const Results &results, UniqueKmersMap &unique_kmers_list, std::string gt_outfile, std::string phase_outfile, bool only_genotyping, bool only_phasing, bool ignore_imputed);
+	void write_genotypes_of(std::string chromosome, const std::vector<GenotypingResult>& genotyping_result, std::vector<UniqueKmers*>* unique_kmers, std::ofstream &gt_stream, bool ignore_imputed = false);
+	void write_phasing_of(std::string chromosome, const std::vector<GenotypingResult>& genotyping_result, std::vector<UniqueKmers*>* unique_kmers, std::ofstream &phasing_stream, bool ignore_imputed = false);
+	// size_t nr_of_genomic_kmers() const;
 	size_t nr_of_paths() const;
 	void get_left_overhang(std::string chromosome, size_t index, size_t length, DnaSequence& result) const;
 	void get_right_overhang(std::string chromosome, size_t index, size_t length, DnaSequence& result) const;
     void Store(std::string filename) const;
     void Load(std::string name);
+	void swap(VariantReader & var) noexcept;
+	VariantReader & operator=(VariantReader var);
 	std::string sample;
 
 private:
@@ -78,14 +78,16 @@ private:
 	void serialize(Archive & archive) {
     	archive(kmer_size, nr_paths, nr_variants, add_reference, sample, variants_per_chromosome, variant_ids); 
     }
+	void open_genotyping_outfile(std::string outfile_name, std::ofstream &genotyping_outfile);
+	void open_phasing_outfile(std::string outfile_name, std::ofstream &phasing_outfile);
+	void close_genotyping_outfile(std::ofstream &gt_stream);
+	void close_phasing_outfile(std::ofstream &phasing_outfile);
 
     std::string REF_VCF_HASH_NAME;
 	size_t kmer_size;
 	size_t nr_paths;
 	size_t nr_variants;
 	bool add_reference;
-	std::ofstream genotyping_outfile;
-	std::ofstream phasing_outfile;
 	bool genotyping_outfile_open;
 	bool phasing_outfile_open;
 	std::map< std::string, std::vector<Variant> > variants_per_chromosome;

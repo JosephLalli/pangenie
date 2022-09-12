@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <mutex>
 #include <utility>
 #include "copynumber.hpp"
 #include "kmerpath.hpp"
@@ -66,4 +67,11 @@ private:
 	friend class EmissionProbabilityComputer;
 	
 };
+
+struct UniqueKmersMap {
+	std::mutex kmers_mutex;
+	std::map<std::string, std::vector<UniqueKmers*>> unique_kmers;
+	std::map<std::string, double> runtimes;
+};
+
 # endif // UNIQUEKMERS_HPP
