@@ -16,7 +16,7 @@ link_directories(${JELLYFISH_LIBRARY_DIRS})
 include_directories(${JELLYFISH_INCLUDE_DIRS} ${CMAKE_BINARY_DIR}/src)
 add_compile_options(${JELLYFISH_CFLAGS_OTHER})
 
-set(CMAKE_CXX_FLAGS "-O3 -march=native -W -Wall -pedantic -fiopenmp -fma -funroll-loops")
+# set(CMAKE_CXX_FLAGS "-O3 -march=native -W -Wall -fPIC -fiopenmp -fma -funroll-loops")
 
 add_subdirectory(src)
 add_subdirectory(tests)

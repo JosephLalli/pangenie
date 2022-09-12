@@ -159,6 +159,7 @@ int main (int argc, char* argv[])
 	argument_parser.add_optional_argument('j', "1", "number of threads to use for kmer-counting");
 	argument_parser.add_optional_argument('t', "1", "number of threads to use for core algorithm. Largest number of threads possible is the number of chromosomes given in the VCF");
 //	argument_parser.add_optional_argument('n', "0.00001", "effective population size");
+	argument_parser.add_flag_argument('f', "use fasta file of unique kmers in working directory, do not make new version");
 	argument_parser.add_flag_argument('g', "run genotyping (Forward backward algorithm, default behaviour).");
 	argument_parser.add_flag_argument('p', "run phasing (Viterbi algorithm). Experimental feature.");
 //	argument_parser.add_optional_argument('m', "0.001", "regularization constant for copynumber probabilities");
@@ -190,6 +191,7 @@ int main (int argc, char* argv[])
 	
 	bool genotyping_flag = argument_parser.get_flag('g');
 	bool phasing_flag = argument_parser.get_flag('p');
+	bool kmer_fasta_flag = argument_parser.get_flag('f');
 	
 	if (genotyping_flag && phasing_flag) {
 		only_genotyping = false;
@@ -216,7 +218,7 @@ int main (int argc, char* argv[])
     VariantReader variant_reader;
     vector<string> chromosomes;
 
-    const std::string REF_VCF_HASH_NAME = hash_filenames(reffile,vcffile);
+    const std::string REF_VCF_HASH_NAME = hash_filenames(reffile, vcffile);
     std::cout<<"Using file hash of " << REF_VCF_HASH_NAME << std::endl;
     //string segment_file = "pangenie.debug.fasta"; //"pangenie."+REF_VCF_HASH_NAME + ".path_segments.fasta";
     string segment_file = "pangenie."+REF_VCF_HASH_NAME + ".path_segments.fasta";
@@ -224,6 +226,8 @@ int main (int argc, char* argv[])
     
     check_input_file(vcffile);
     check_input_file(reffile);
+
+	bool jellyfish_provided = readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf");
 
     if (build_index) {
     // check if input files exist and are uncompressed
@@ -237,8 +241,9 @@ int main (int argc, char* argv[])
 	getrusage(RUSAGE_SELF, &r_usage00);
 	cerr << "#### Memory usage until now: " << (r_usage00.ru_maxrss / 1E6) << " GB ####" << endl;
 	
+	if (!kmer_fasta_flag || !jellyfish_provided){
 	cerr << "Write path segments to file: " << segment_file << " ..." << endl;
-	variant_reader2.write_path_segments(segment_file);
+	variant_reader2.write_path_segments(segment_file);}
 	// determine chromosomes present in VCF
 	variant_reader2.get_chromosomes(&chromosomes);
 	cerr << "Found " << chromosomes.size() << " chromosome(s) in the VCF." << endl;
@@ -274,7 +279,7 @@ int main (int argc, char* argv[])
 	{
 		KmerCounter* read_kmer_counts = nullptr;
 		// determine kmer copynumbers in reads
-		if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
+		if (jellyfish_provided) {
 			cerr << "Read pre-computed read kmer counts ..." << endl;
 			jellyfish::mer_dna::k(kmersize);
 			read_kmer_counts = new JellyfishReader(readfile, kmersize);
