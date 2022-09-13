@@ -143,7 +143,6 @@ int main (int argc, char* argv[])
 	bool count_only_graph = true;
 	bool ignore_imputed = false;
 	bool add_reference = true;
-	bool build_index = false;
     size_t sampling_size = 0;
 	uint64_t hash_size = 3000000000;
 
@@ -168,8 +167,6 @@ int main (int argc, char* argv[])
 	argument_parser.add_flag_argument('d', "do not add reference as additional path.");
 //	argument_parser.add_optional_argument('a', "0", "sample subsets of paths of this size.");
 	argument_parser.add_optional_argument('e', "3000000000", "size of hash used by jellyfish.");
-    argument_parser.add_flag_argument('B', "Build index but don't run PanGenie");
-    argument_parser.add_flag_argument('D', "debug");
 
 	try {
 		argument_parser.parse(argc, argv);
@@ -207,7 +204,6 @@ int main (int argc, char* argv[])
 	count_only_graph = !argument_parser.get_flag('c');
 	ignore_imputed = argument_parser.get_flag('u');
 	add_reference = !argument_parser.get_flag('d');
-    build_index = argument_parser.get_flag('B');
 //	sampling_size = stoi(argument_parser.get_argument('a'));
 	istringstream iss(argument_parser.get_argument('e'));
 	iss >> hash_size;
@@ -215,37 +211,32 @@ int main (int argc, char* argv[])
 	// print info
 	cerr << "Files and parameters used:" << endl;
 	argument_parser.info();
-    VariantReader variant_reader;
-    vector<string> chromosomes;
-
-    const std::string REF_VCF_HASH_NAME = hash_filenames(reffile, vcffile);
-    std::cout<<"Using file hash of " << REF_VCF_HASH_NAME << std::endl;
-    //string segment_file = "pangenie.debug.fasta"; //"pangenie."+REF_VCF_HASH_NAME + ".path_segments.fasta";
-    string segment_file = "pangenie."+REF_VCF_HASH_NAME + ".path_segments.fasta";
-    //string segment_file = outname + "_path_segments.fasta";
-    
-    check_input_file(vcffile);
-    check_input_file(reffile);
 
 	bool jellyfish_provided = readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf");
 
-    if (build_index) {
-    // check if input files exist and are uncompressed
+	// check if input files exist and are uncompressed
+	check_input_file(reffile);
+	check_input_file(vcffile);
+	check_input_file(readfile);
 
 	// read allele sequences and unitigs inbetween, write them into file
 	cerr << "Determine allele sequences ..." << endl;
-	VariantReader variant_reader2(vcffile, reffile, kmersize, add_reference, sample_name);
+	VariantReader variant_reader (vcffile, reffile, kmersize, add_reference, sample_name);
 	
 	// TODO: only for analysis
 	struct rusage r_usage00;
 	getrusage(RUSAGE_SELF, &r_usage00);
 	cerr << "#### Memory usage until now: " << (r_usage00.ru_maxrss / 1E6) << " GB ####" << endl;
 	
+	string segment_file = outname + "_path_segments.fasta";
+
 	if (!kmer_fasta_flag || !jellyfish_provided){
-	cerr << "Write path segments to file: " << segment_file << " ..." << endl;
-	variant_reader2.write_path_segments(segment_file);}
+		cerr << "Write path segments to file: " << segment_file << " ..." << endl;
+		variant_reader.write_path_segments(segment_file);
+	}
 	// determine chromosomes present in VCF
-	variant_reader2.get_chromosomes(&chromosomes);
+	vector<string> chromosomes;
+	variant_reader.get_chromosomes(&chromosomes);
 	cerr << "Found " << chromosomes.size() << " chromosome(s) in the VCF." << endl;
 
 	// TODO: only for analysis
@@ -254,23 +245,6 @@ int main (int argc, char* argv[])
 	cerr << "#### Memory usage until now: " << (r_usage0.ru_maxrss / 1E6) << " GB ####" << endl;
 
 	time_preprocessing = timer.get_interval_time();
-    variant_reader2.Store();
-    std::cout << "stored" <<std::endl;
-    return 0;
-    }
-    else {
-    if (!argument_parser.get_flag('D')) {
-    readfile = argument_parser.get_argument('i');
-    check_input_file(readfile);
-    std::cout << "LOADING previous" <<std::endl;
-   
-    variant_reader.Load(REF_VCF_HASH_NAME);
-    variant_reader.fasta_reader.parse_file(reffile);
-    variant_reader.get_chromosomes(&chromosomes);
-    variant_reader.sample = sample_name;
-    }
-    }
-    
 
 	// UniqueKmers for each chromosome
 	UniqueKmersMap unique_kmers_list;
