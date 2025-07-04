@@ -25,11 +25,13 @@ TEST_CASE("Commands_KFF_file_detection", "[Commands][KFF]") {
     // Test file extension checking logic (similar to what's in commands.cpp)
     bool is_kff = (kff_filename.substr(std::max(4, (int) kff_filename.size())-4) == std::string(".kff"));
     bool is_jf = (jf_filename.substr(std::max(3, (int) jf_filename.size())-3) == std::string(".jf"));
-    bool is_fasta = (fasta_filename.substr(std::max(3, (int) fasta_filename.size())-3) == std::string(".fa"));
+    bool is_fasta_kff = (fasta_filename.substr(std::max(4, (int) fasta_filename.size())-4) == std::string(".kff"));
+    bool is_fasta_jf = (fasta_filename.substr(std::max(3, (int) fasta_filename.size())-3) == std::string(".jf"));
     
     REQUIRE(is_kff == true);
     REQUIRE(is_jf == true);
-    REQUIRE(is_fasta == false); // .fa files should not match .jf or .kff patterns
+    REQUIRE(is_fasta_kff == false); // .fa files should not match .kff pattern
+    REQUIRE(is_fasta_jf == false); // .fa files should not match .jf pattern
 }
 
 TEST_CASE("Commands_KFF_edge_cases", "[Commands][KFF]") {
@@ -98,7 +100,7 @@ TEST_CASE("Commands_KFF_polymorphism", "[Commands][KFF]") {
     
     try {
         // Create KffReader through base class interface
-        unique_ptr<KmerCounter> counter = make_unique<KffReader>("../tests/data/test.kff", 10);
+        unique_ptr<KmerCounter> counter(new KffReader("../tests/data/test.kff", 10));
         
         // Test all interface methods
         string kmer = "ATGCTGTAAA";
@@ -117,7 +119,7 @@ TEST_CASE("Commands_KFF_polymorphism", "[Commands][KFF]") {
         REQUIRE(coverage >= 0);
         
         // Test histogram computation
-        REQUIRE_NOTHROWS(counter->computeHistogram(1000, true, ""));
+        REQUIRE_NOTHROW(counter->computeHistogram(1000, true, ""));
         
     } catch (const exception& e) {
         // Expected if test file is not available or invalid

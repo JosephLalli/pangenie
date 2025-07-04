@@ -15,7 +15,7 @@ KffReader::KffReader(string kff_file, size_t kmersize)
     : filename(kff_file), kmer_size(kmersize), cache_populated(false) {
     
     try {
-        kff_reader = std::make_unique<Kff_reader>(kff_file);
+        kff_reader = unique_ptr<Kff_reader>(new Kff_reader(kff_file));
         
         // Verify k-mer size matches
         if (kff_reader->get_var("k") != kmersize) {
@@ -44,7 +44,7 @@ void KffReader::populate_cache() {
     
     // Reset reader to beginning
     kff_reader.reset();
-    kff_reader = std::make_unique<Kff_reader>(filename);
+    kff_reader = unique_ptr<Kff_reader>(new Kff_reader(filename));
     
     uint8_t* kmer_binary;
     uint8_t* data;

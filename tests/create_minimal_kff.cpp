@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <cstring>
 
 /**
  * Creates a minimal KFF file for testing purposes.
@@ -13,10 +14,12 @@ int create_test_kff(const std::string& filename, size_t k = 10) {
         // Create KFF file writer
         Kff_file kff_file(filename, "w");
         
-        // Set global variables
-        kff_file.write_var("k", (uint64_t)k);
-        kff_file.write_var("data_size", (uint64_t)8); // 8 bytes for count
-        kff_file.write_var("max", (uint64_t)255);
+        // Set global variables using Section_GV
+        Section_GV gv_section(&kff_file);
+        gv_section.write_var("k", (uint64_t)k);
+        gv_section.write_var("data_size", (uint64_t)8); // 8 bytes for count
+        gv_section.write_var("max", (uint64_t)255);
+        gv_section.close();
         
         // Define test k-mers and their counts
         std::vector<std::pair<std::string, uint64_t>> test_data = {
@@ -33,7 +36,7 @@ int create_test_kff(const std::string& filename, size_t k = 10) {
         // Create a raw section
         Section_Raw section(&kff_file);
         
-        // Write k-mers to the section
+        // Write k-mers to the section as sequences
         for (const auto& pair : test_data) {
             const std::string& kmer_str = pair.first;
             uint64_t count = pair.second;
@@ -43,7 +46,7 @@ int create_test_kff(const std::string& filename, size_t k = 10) {
                 continue;
             }
             
-            // Convert string k-mer to binary
+            // Convert string k-mer to binary (2 bits per nucleotide)
             uint8_t* kmer_binary = new uint8_t[(k + 3) / 4];
             memset(kmer_binary, 0, (k + 3) / 4);
             
@@ -62,11 +65,15 @@ int create_test_kff(const std::string& filename, size_t k = 10) {
                 kmer_binary[byte_idx] |= (nucleotide << bit_offset);
             }
             
-            // Write k-mer and count
-            uint8_t* data = reinterpret_cast<uint8_t*>(&count);
-            section.write_kmer(kmer_binary, data);
+            // Write sequence and data using write_compacted_sequence
+            uint8_t* data_array = new uint8_t[8]; // 8 bytes for count
+            memset(data_array, 0, 8);
+            *reinterpret_cast<uint64_t*>(data_array) = count;
+            
+            section.write_compacted_sequence(kmer_binary, k, data_array);
             
             delete[] kmer_binary;
+            delete[] data_array;
         }
         
         section.close();

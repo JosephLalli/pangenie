@@ -3,7 +3,7 @@
 
 #ifdef KFF_SUPPORT
 #include "../src/kffreader.hpp"
-#include "../src/jellyfishcounter.hpp"
+#include "../src/jellyfishreader.hpp"
 #include <vector>
 #include <string>
 #include <fstream>
@@ -53,7 +53,7 @@ TEST_CASE("KffReader_histogram", "[KffReader]") {
     KffReader reader("../tests/data/test.kff", 10);
     
     // Test histogram computation doesn't crash
-    REQUIRE_NOTHROWS(reader.computeHistogram(1000, true, ""));
+    REQUIRE_NOTHROW(reader.computeHistogram(1000, true, ""));
 }
 
 TEST_CASE("KffReader_coverage", "[KffReader]") {
