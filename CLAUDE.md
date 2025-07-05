@@ -156,3 +156,87 @@ make
 # Should show KFF-related messages during cmake configuration
 # Tests will include KFF functionality when enabled
 ```
+
+## Current Status
+
+### ✅ Working
+- **PanGenie builds successfully with KFF support enabled**
+- **Main executables**: `PanGenie` and `PanGenie-index` compiled with KFF symbols
+- **CMake configuration**: Properly detects KFF C++ API at `/home/lalli/usr/local`
+- **Environment**: CMAKE_PREFIX_PATH correctly set to `/home/lalli/usr/local`
+
+### ⚠️ Known Issues
+- **Test compatibility**: Some test files may have compatibility issues with newer KFF API versions
+- **Symbolic links**: Fixed broken KFF header links in `/home/lalli/usr/local/include/`
+
+## Lessons Learned: CMake & Build Environment
+
+### Local Installation Paths
+- **Critical**: KFF C++ API is installed in `/home/lalli/usr/local`, NOT `/usr/local`
+- **Environment**: CMAKE_PREFIX_PATH correctly set to `/home/lalli/usr/local`
+- **CMake configuration**: Updated to use `/home/lalli/usr/local` as default install prefix
+
+### Symbolic Link Management
+- **Problem**: Broken symbolic links in `/home/lalli/usr/local/include/` caused header detection failures
+- **Solution**: Fixed links to point to actual header files in build directory
+- **Verification**: Use `ls -la` to check link validity before troubleshooting CMake
+
+### CMake Debugging
+- **Tool**: Use `cmake --debug-output` to trace exact search paths
+- **Pattern**: CMake finds libraries but fails on headers due to broken links
+- **Verification**: Check both `find_path` and `find_library` results separately
+
+### Safety Practices
+- **File operations**: Always use absolute paths with `rm` commands
+- **Verification**: Confirm current directory before running destructive commands
+- **Never reinstall**: Don't attempt to reinstall KFF C++ API without explicit permission
+
+### Build Configuration
+- **Threading**: Use `-j24` for parallel compilation
+- **KFF Detection**: CMake lines 40-64 handle KFF detection logic
+- **Verification**: Check binary symbols with `strings` command to confirm KFF integration
+
+## Troubleshooting KFF Integration
+
+1. **Check environment**: Verify CMAKE_PREFIX_PATH includes `/home/lalli/usr/local`
+2. **Verify installation**: Confirm KFF library and headers exist in local install directory
+3. **Check symbolic links**: Ensure header links point to valid files
+4. **Debug CMake**: Use `--debug-output` to trace search paths
+5. **Verify integration**: Check compiled binary contains KFF symbols
+
+## KFF Test Data Creation
+
+### Successfully Created KFF Test Files
+
+**Completed**: Created `reads.kff` as KFF equivalent of existing `reads.jf` test data
+
+#### Conversion Process Used:
+```bash
+# 1. Extract k-mers from existing jellyfish file
+jellyfish dump reads.jf > reads_canonical_kmers.txt
+
+# 2. Convert format (jellyfish dump uses >count\nkmer format)
+awk 'NR%2==0' reads_canonical_kmers.txt > reads_kmer_only.txt  
+
+# 3. Create KFF file using kff-tools
+kff-tools instr -i reads_kmer_only.txt -o reads.kff -k 10
+```
+
+#### Validation Results:
+- ✅ **File created**: `reads.kff` (209 bytes)
+- ✅ **K-mer count**: 9 k-mers (matches expected from 18-line jellyfish dump)
+- ✅ **Format verified**: `kff-tools outstr` confirms readable KFF format
+- ✅ **Source parameters**: k=10, canonical=yes, from `reads.fa`
+
+#### Next Steps Available:
+- Test PanGenie functionality with the new KFF file
+- Update test suite to include KFF file testing
+
+#### Tools Required:
+- `kff-tools` (available at `/home/lalli/usr/local/bin/kff-tools`)
+- `jellyfish` for original data extraction
+
+## Current Working Directory
+
+Project root: `/mnt/ssd/lalli/pangenie`
+Build directory: `/mnt/ssd/lalli/pangenie/build`
