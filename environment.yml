@@ -24,6 +24,7 @@ dependencies:
   - jellyfish=2.2.10=h6bb024c_1
   - jemalloc=4.5.0=0
   - jsoncpp=1.9.5=h4bd325d_0
+  - git=2.31.1=pl5321hfbddf73_1
   - kernel-headers_linux-64=2.6.32=he073ed8_15
   - krb5=1.19.2=hac12032_0
   - ld_impl_linux-64=2.36.1=hea4e1c9_2
@@ -60,3 +61,5 @@ dependencies:
   - xz=5.2.5=h7b6447c_0
   - zlib=1.2.11=h7b6447c_3
   - zstd=1.4.9=haebb681_0
+  - pip:
+    - kff-cpp-api

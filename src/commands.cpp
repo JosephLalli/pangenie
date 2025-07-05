@@ -14,6 +14,9 @@
 #include "kmercounter.hpp"
 #include "jellyfishreader.hpp"
 #include "jellyfishcounter.hpp"
+#ifdef KFF_SUPPORT
+#include "kffreader.hpp"
+#endif
 #include "emissionprobabilitycomputer.hpp"
 #include "copynumber.hpp"
 #include "graph.hpp"
@@ -311,9 +314,15 @@ int run_single_command(string precomputed_prefix, string readfile, string reffil
 			shared_ptr<KmerCounter> read_kmer_counts = nullptr;
 			// determine kmer copynumbers in reads
 			if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
-				cerr << "Read pre-computed read kmer counts ..." << endl;
+				cerr << "Read pre-computed read kmer counts from Jellyfish file ..." << endl;
 				jellyfish::mer_dna::k(kmersize);
 				read_kmer_counts = shared_ptr<JellyfishReader>(new JellyfishReader(readfile, kmersize));
+#ifdef KFF_SUPPORT
+			} else if (readfile.substr(std::max(4, (int) readfile.size())-4) == std::string(".kff")) {
+				cerr << "Read pre-computed read kmer counts from KFF file ..." << endl;
+				jellyfish::mer_dna::k(kmersize);
+				read_kmer_counts = shared_ptr<KffReader>(new KffReader(readfile, kmersize));
+#endif
 			} else {
 				cerr << "Count kmers in reads ..." << endl;
 
