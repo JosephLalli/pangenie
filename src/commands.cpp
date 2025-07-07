@@ -58,6 +58,52 @@ void check_input_file(string &filename) {
 	}
 }
 
+shared_ptr<KmerCounter> create_kmer_counter(const string& readfile, size_t kmersize, size_t nr_jellyfish_threads, uint64_t hash_size, bool count_only_graph, const string& segment_file, bool force_jf, bool force_kff) {
+	shared_ptr<KmerCounter> read_kmer_counts = nullptr;
+	
+	// Check for explicit format specification first
+	if (force_jf && force_kff) {
+		throw runtime_error("Cannot specify both --jf and --kff flags simultaneously.");
+	}
+	
+	if (force_jf) {
+		cerr << "Read pre-computed read kmer counts from Jellyfish file ..." << endl;
+		jellyfish::mer_dna::k(kmersize);
+		read_kmer_counts = shared_ptr<JellyfishReader>(new JellyfishReader(readfile, kmersize));
+	} else if (force_kff) {
+#ifdef KFF_SUPPORT
+		cerr << "Read pre-computed read kmer counts from KFF file ..." << endl;
+		jellyfish::mer_dna::k(kmersize);
+		read_kmer_counts = shared_ptr<KffReader>(new KffReader(readfile, kmersize));
+#else
+		throw runtime_error("KFF support not enabled. Please recompile with -DENABLE_KFF_SUPPORT=ON.");
+#endif
+	} else {
+		// Fall back to automatic detection based on file extension
+		if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
+			cerr << "Read pre-computed read kmer counts from Jellyfish file ..." << endl;
+			jellyfish::mer_dna::k(kmersize);
+			read_kmer_counts = shared_ptr<JellyfishReader>(new JellyfishReader(readfile, kmersize));
+#ifdef KFF_SUPPORT
+		} else if (readfile.substr(std::max(4, (int) readfile.size())-4) == std::string(".kff")) {
+			cerr << "Read pre-computed read kmer counts from KFF file ..." << endl;
+			jellyfish::mer_dna::k(kmersize);
+			read_kmer_counts = shared_ptr<KffReader>(new KffReader(readfile, kmersize));
+#endif
+		} else {
+			cerr << "Count kmers in reads ..." << endl;
+			
+			if (count_only_graph) {
+				read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, {segment_file}, kmersize, nr_jellyfish_threads, hash_size));
+			} else {
+				read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, kmersize, nr_jellyfish_threads, hash_size));
+			}
+		}
+	}
+	
+	return read_kmer_counts;
+}
+
 
 struct Results {
 	mutex result_mutex;
@@ -224,7 +270,7 @@ void prepare_unique_kmers(string chromosome, KmerCounter* genomic_kmer_counts, s
 
 
 
-int run_single_command(string precomputed_prefix, string readfile, string reffile, string vcffile, size_t kmersize, string outname, string sample_name, size_t nr_jellyfish_threads, size_t nr_core_threads, bool only_genotyping, bool only_phasing, long double effective_N, long double regularization, bool count_only_graph, bool ignore_imputed, bool add_reference, size_t sampling_size, uint64_t hash_size, size_t panel_size, double recombrate, bool output_panel,  long double sampling_effective_N, unsigned short allele_penalty, bool serialize_output)
+int run_single_command(string precomputed_prefix, string readfile, string reffile, string vcffile, size_t kmersize, string outname, string sample_name, size_t nr_jellyfish_threads, size_t nr_core_threads, bool only_genotyping, bool only_phasing, long double effective_N, long double regularization, bool count_only_graph, bool ignore_imputed, bool add_reference, size_t sampling_size, uint64_t hash_size, size_t panel_size, double recombrate, bool output_panel,  long double sampling_effective_N, unsigned short allele_penalty, bool serialize_output, bool force_jf, bool force_kff)
 {
 
 	Timer timer;
@@ -311,27 +357,8 @@ int run_single_command(string precomputed_prefix, string readfile, string reffil
 			* Step 3: count k-mers in reads
 			**/
 
-			shared_ptr<KmerCounter> read_kmer_counts = nullptr;
 			// determine kmer copynumbers in reads
-			if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
-				cerr << "Read pre-computed read kmer counts from Jellyfish file ..." << endl;
-				jellyfish::mer_dna::k(kmersize);
-				read_kmer_counts = shared_ptr<JellyfishReader>(new JellyfishReader(readfile, kmersize));
-#ifdef KFF_SUPPORT
-			} else if (readfile.substr(std::max(4, (int) readfile.size())-4) == std::string(".kff")) {
-				cerr << "Read pre-computed read kmer counts from KFF file ..." << endl;
-				jellyfish::mer_dna::k(kmersize);
-				read_kmer_counts = shared_ptr<KffReader>(new KffReader(readfile, kmersize));
-#endif
-			} else {
-				cerr << "Count kmers in reads ..." << endl;
-
-				if (count_only_graph) {
-					read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, {segment_file}, kmersize, nr_jellyfish_threads, hash_size));
-				} else {
-					read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, kmersize, nr_jellyfish_threads, hash_size));
-				}
-			}
+			shared_ptr<KmerCounter> read_kmer_counts = create_kmer_counter(readfile, kmersize, nr_jellyfish_threads, hash_size, count_only_graph, segment_file, force_jf, force_kff);
 
 
 			/**
@@ -736,7 +763,7 @@ int run_index_command(string reffile, string vcffile, size_t kmersize, string ou
 
 }
 
-int run_genotype_command(string precomputed_prefix, string readfile, string outname, string sample_name, size_t nr_jellyfish_threads, size_t nr_core_threads, bool only_genotyping, bool only_phasing, long double effective_N, long double regularization, bool count_only_graph, bool ignore_imputed, size_t sampling_size, uint64_t hash_size, size_t panel_size, double recombrate, bool output_panel,  long double sampling_effective_N, unsigned short allele_penalty, bool serialize_output)
+int run_genotype_command(string precomputed_prefix, string readfile, string outname, string sample_name, size_t nr_jellyfish_threads, size_t nr_core_threads, bool only_genotyping, bool only_phasing, long double effective_N, long double regularization, bool count_only_graph, bool ignore_imputed, size_t sampling_size, uint64_t hash_size, size_t panel_size, double recombrate, bool output_panel,  long double sampling_effective_N, unsigned short allele_penalty, bool serialize_output, bool force_jf, bool force_kff)
 {
 
 	Timer timer;
@@ -826,21 +853,8 @@ int run_genotype_command(string precomputed_prefix, string readfile, string outn
 
 			size_t kmersize = unique_kmers_list.kmersize;
 
-			shared_ptr<KmerCounter> read_kmer_counts = nullptr;
 			// determine kmer copynumbers in reads
-			if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
-				cerr << "Read pre-computed read kmer counts ..." << endl;
-				jellyfish::mer_dna::k(kmersize);
-				read_kmer_counts = shared_ptr<JellyfishReader>(new JellyfishReader(readfile, kmersize));
-			} else {
-				cerr << "Count kmers in reads ..." << endl;
-
-				if (count_only_graph) {
-					read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, {segment_file}, kmersize, nr_jellyfish_threads, hash_size));
-				} else {
-					read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, kmersize, nr_jellyfish_threads, hash_size));
-				}
-			}
+			shared_ptr<KmerCounter> read_kmer_counts = create_kmer_counter(readfile, kmersize, nr_jellyfish_threads, hash_size, count_only_graph, segment_file, force_jf, force_kff);
 
 
 			/**
@@ -1162,7 +1176,7 @@ int run_vcf_command(string precomputed_prefix, string results_name, string outna
 
 
 
-int run_sampling(string precomputed_prefix, string readfile, string outname, size_t nr_jellyfish_threads, size_t nr_core_threads, long double regularization, bool count_only_graph, uint64_t hash_size, size_t panel_size, double recombrate, long double sampling_effective_N, unsigned short allele_penalty)
+int run_sampling(string precomputed_prefix, string readfile, string outname, size_t nr_jellyfish_threads, size_t nr_core_threads, long double regularization, bool count_only_graph, uint64_t hash_size, size_t panel_size, double recombrate, long double sampling_effective_N, unsigned short allele_penalty, bool force_jf, bool force_kff)
 {
 
 	Timer timer;
@@ -1242,21 +1256,8 @@ int run_sampling(string precomputed_prefix, string readfile, string outname, siz
 
 			size_t kmersize = unique_kmers_list.kmersize;
 
-			shared_ptr<KmerCounter> read_kmer_counts = nullptr;
 			// determine kmer copynumbers in reads
-			if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
-				cerr << "Read pre-computed read kmer counts ..." << endl;
-				jellyfish::mer_dna::k(kmersize);
-				read_kmer_counts = shared_ptr<JellyfishReader>(new JellyfishReader(readfile, kmersize));
-			} else {
-				cerr << "Count kmers in reads ..." << endl;
-
-				if (count_only_graph) {
-					read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, {segment_file}, kmersize, nr_jellyfish_threads, hash_size));
-				} else {
-					read_kmer_counts = shared_ptr<JellyfishCounter>(new JellyfishCounter(readfile, kmersize, nr_jellyfish_threads, hash_size));
-				}
-			}
+			shared_ptr<KmerCounter> read_kmer_counts = create_kmer_counter(readfile, kmersize, nr_jellyfish_threads, hash_size, count_only_graph, segment_file, force_jf, force_kff);
 
 
 			/**

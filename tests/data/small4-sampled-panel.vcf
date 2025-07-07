@@ -1,0 +1,10 @@
+##fileformat=VCFv4.2
+##fileDate=20250707
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##INFO=<ID=UK,Number=1,Type=Integer,Description="Total number of unique kmers.">
+##INFO=<ID=MA,Number=1,Type=Integer,Description="Number of alleles missing in panel haplotypes.">
+##INFO=<ID=ID,Number=A,Type=String,Description="Variant IDs.">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sampledHT0	sampledHT1	sampledHT2	sampledHT3	sampledHT4	sampledHT5	sampledHT6	sampledHT7	sampledHT8	sampledHT9	sampledHT10	sampledHT11	sampledHT12	sampledHT13	sampledHT14	sampledHT15	sampledHT16	sampledHT17	sampledHT18	sampledHT19	sampledHT20	sampledHT21	sampledHT22	sampledHT23
+chrA	161	.	G	TA,TAAA	.	PASS	AF=0.375,0.416667;UK=14;MA=2	GT	0	1	1	1	2	1	2	2	2	1	1	0	2	2	.	.	1	2	2	1	2	2	1	0
+chrA	166	.	G	T	.	PASS	AF=0.666667;UK=14;MA=6	GT	.	1	.	.	.	1	1	1	1	1	1	0	1	1	.	.	1	1	1	1	1	1	1	0

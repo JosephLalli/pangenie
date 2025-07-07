@@ -36,7 +36,11 @@ int main(int argc, char* argv[]) {
 	CommandLineParser argument_parser;
 	argument_parser.add_command("PanGenie-sampling [options] -f <index-prefix> -i <reads.fa/fq> -o <outfile-prefix>");
 	argument_parser.add_optional_argument('k', "31", "kmer size");
+#ifdef KFF_SUPPORT
+	argument_parser.add_mandatory_argument('i', "sequencing reads in FASTA/FASTQ format or Jellyfish database in jf format or KFF database in kff format. NOTE: INPUT FASTA/Q FILE MUST NOT BE COMPRESSED");
+#else
 	argument_parser.add_mandatory_argument('i', "sequencing reads in FASTA/FASTQ format or Jellyfish database in jf format. NOTE: INPUT FASTA/Q FILE MUST NOT BE COMPRESSED");
+#endif
 	argument_parser.add_mandatory_argument('f', "Filename prefix of files computed by PanGenie-index (i.e. option -o used with PanGenie-index)");
 	argument_parser.add_optional_argument('o', "result", "prefix of the output files. NOTE: the given path must not include non-existent folders");
 	argument_parser.add_optional_argument('j', "1", "number of threads to use for kmer-counting");
@@ -46,6 +50,11 @@ int main(int argc, char* argv[]) {
 	argument_parser.add_optional_argument('x', "0", "to which size the input panel shall be reduced.");
 	argument_parser.add_optional_argument('y', "5", "Penality used for already selected alleles in sampling step.");
 	argument_parser.add_optional_argument('b', "0.01", "effective population size for sampling step.");
+	argument_parser.add_flag_argument('l', "force input file to be treated as Jellyfish (.jf) format");
+#ifdef KFF_SUPPORT
+	argument_parser.add_flag_argument('m', "force input file to be treated as KFF (.kff) format");
+	argument_parser.not_both('l', 'm');
+#endif
 
 	try {
 		argument_parser.parse(argc, argv);
@@ -71,12 +80,18 @@ int main(int argc, char* argv[]) {
 	iss >> hash_size;
 	allele_penalty = stoi(argument_parser.get_argument('y'));
 	sampling_effective_N = stof(argument_parser.get_argument('b'));
-
+	
+	bool force_jf = argument_parser.get_flag('l');
+#ifdef KFF_SUPPORT
+	bool force_kff = argument_parser.get_flag('m');
+#else
+	bool force_kff = false;
+#endif
 
 	precomputed_prefix = argument_parser.get_argument('f');
 
 	// run sampling
-	int exit_code = run_sampling(precomputed_prefix, readfile, outname, nr_jellyfish_threads, nr_core_threads, regularization, count_only_graph, hash_size, panel_size, recombrate, sampling_effective_N, allele_penalty);
+	int exit_code = run_sampling(precomputed_prefix, readfile, outname, nr_jellyfish_threads, nr_core_threads, regularization, count_only_graph, hash_size, panel_size, recombrate, sampling_effective_N, allele_penalty, force_jf, force_kff);
 
 	getrusage(RUSAGE_SELF, &rss_total);
 

@@ -50,7 +50,11 @@ int main(int argc, char* argv[]) {
 	argument_parser.add_optional_argument('r', "", "reference genome in FASTA format. NOTE: INPUT FASTA FILE MUST NOT BE COMPRESSED");
 	argument_parser.add_optional_argument('v', "", "variants in VCF format. NOTE: INPUT VCF FILE MUST NOT BE COMPRESSED");
 	argument_parser.add_optional_argument('k', "31", "kmer size");
+#ifdef KFF_SUPPORT
+	argument_parser.add_mandatory_argument('i', "sequencing reads in FASTA/FASTQ format or Jellyfish database in jf format or KFF database in kff format. NOTE: INPUT FASTA/Q FILE MUST NOT BE COMPRESSED");
+#else
 	argument_parser.add_mandatory_argument('i', "sequencing reads in FASTA/FASTQ format or Jellyfish database in jf format. NOTE: INPUT FASTA/Q FILE MUST NOT BE COMPRESSED");
+#endif
 	argument_parser.add_optional_argument('f', "", "Filename prefix of files computed by PanGenie-index (i.e. option -o used with PanGenie-index)");
 	argument_parser.add_optional_argument('o', "result", "prefix of the output files. NOTE: the given path must not include non-existent folders");
 	argument_parser.add_optional_argument('s', "sample", "name of the sample (will be used in the output VCFs)");
@@ -67,11 +71,18 @@ int main(int argc, char* argv[]) {
 	argument_parser.add_optional_argument('y', "5", "Penality used for already selected alleles in sampling step.");
 	argument_parser.add_optional_argument('b', "0.01", "effective population size for sampling step.");
 	argument_parser.add_flag_argument('w', "instead of writing an output vcf, serialize genotyping results.");
+	argument_parser.add_flag_argument('l', "force input file to be treated as Jellyfish (.jf) format");
+#ifdef KFF_SUPPORT
+	argument_parser.add_flag_argument('m', "force input file to be treated as KFF (.kff) format");
+#endif
 
 	argument_parser.exactly_one('f', 'v');
 	argument_parser.exactly_one('f', 'r');
 	argument_parser.not_both('x', 'a');
 	argument_parser.not_both('f', 'k');
+#ifdef KFF_SUPPORT
+	argument_parser.not_both('l', 'm');
+#endif
 
 	try {
 		argument_parser.parse(argc, argv);
@@ -115,12 +126,19 @@ int main(int argc, char* argv[]) {
 	iss >> hash_size;
 	output_panel = argument_parser.get_flag('d');
 	serialize_output = argument_parser.get_flag('w');
+	
+	bool force_jf = argument_parser.get_flag('l');
+#ifdef KFF_SUPPORT
+	bool force_kff = argument_parser.get_flag('m');
+#else
+	bool force_kff = false;
+#endif
 
 	if (argument_parser.exists('f')) {
 		precomputed_prefix = argument_parser.get_argument('f');
 
 		// run genotyping
-		int exit_code = run_genotype_command(precomputed_prefix, readfile, outname, sample_name, nr_jellyfish_threads, nr_core_threads, only_genotyping, only_phasing, effective_N, regularization, count_only_graph, ignore_imputed, sampling_size, hash_size, panel_size, recombrate, output_panel, sampling_effective_N, allele_penalty, serialize_output);
+		int exit_code = run_genotype_command(precomputed_prefix, readfile, outname, sample_name, nr_jellyfish_threads, nr_core_threads, only_genotyping, only_phasing, effective_N, regularization, count_only_graph, ignore_imputed, sampling_size, hash_size, panel_size, recombrate, output_panel, sampling_effective_N, allele_penalty, serialize_output, force_jf, force_kff);
 
 		getrusage(RUSAGE_SELF, &rss_total);
 
@@ -139,7 +157,7 @@ int main(int argc, char* argv[]) {
 
 		cerr << endl << "NOTE: by running PanGenie-index first to pre-process data, you can reduce memory usage and speed up PanGenie. This is helpful especially when genotyping the same variants across multiple samples." << endl << endl;
 
-		int exit_code = run_single_command(outname, readfile, reffile, vcffile, kmersize, outname, sample_name, nr_jellyfish_threads, nr_core_threads, only_genotyping, only_phasing, effective_N, regularization, count_only_graph, ignore_imputed, add_reference, sampling_size, hash_size, panel_size, recombrate, output_panel, sampling_effective_N, allele_penalty, serialize_output);
+		int exit_code = run_single_command(outname, readfile, reffile, vcffile, kmersize, outname, sample_name, nr_jellyfish_threads, nr_core_threads, only_genotyping, only_phasing, effective_N, regularization, count_only_graph, ignore_imputed, add_reference, sampling_size, hash_size, panel_size, recombrate, output_panel, sampling_effective_N, allele_penalty, serialize_output, force_jf, force_kff);
 
 		getrusage(RUSAGE_SELF, &rss_total);
 
