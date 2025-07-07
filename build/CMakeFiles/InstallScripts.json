@@ -1,9 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/mnt/ssd/lalli/pangenie/build/cmake_install.cmake",
-		"/mnt/ssd/lalli/pangenie/build/src/cmake_install.cmake",
-		"/mnt/ssd/lalli/pangenie/build/tests/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

@@ -19,7 +19,8 @@ set(TEST_SOURCES
     GenotypingResultTest.cpp DnaSequenceTest.cpp FastaReaderTest.cpp KmerCounterTest.cpp 
     HistogramTest.cpp PathSamplerTest.cpp ProbabilityTableTest.cpp KmerParser.cpp 
     HaplotypeSamplerTest.cpp SamplingEmissionsTest.cpp SamplingTransitionsTest.cpp 
-    SampledPanelTest.cpp CommandsTest.cpp)
+    SampledPanelTest.cpp CommandsTest.cpp KffReaderTest.cpp CommandsKffTest.cpp 
+    FormatEquivalenceTest.cpp)
 
 add_executable(tests ${TEST_SOURCES} ${ProjectFiles})
 

@@ -53,20 +53,6 @@ mkdir build; cd build; cmake .. ; make
 
 ```
 
-**Optional: Enable KFF file format support**
-To use KFF files as input (an alternative to Jellyfish .jf files), install the KFF C++ API and rebuild with KFF support:
-
-``` bat
-# Install KFF C++ API
-git clone https://github.com/Kmer-File-Format/kff-cpp-api
-cd kff-cpp-api && mkdir build && cd build
-cmake .. && make && make install
-
-# Rebuild PanGenie with KFF support
-cd /path/to/pangenie/build
-cmake -DENABLE_KFF_SUPPORT=ON .. && make
-```
-
 
 
 ### Building from source (requires jellyfish to be installed)
@@ -116,10 +102,7 @@ Note that running this pipeline is not necessary if you are using the input VCFs
 
 ### Input reads
 
-PanGenie is k-mer based and thus expects **short reads** as input. Reads can be provided as:
-- Single FASTA or FASTQ file using the ``-i`` option
-- Pre-computed Jellyfish database (.jf format)  
-- Pre-computed KFF database (.kff format, requires KFF support enabled during build)
+PanGenie is k-mer based and thus expects **short reads** as input. Reads must be provided in a single FASTA or FASTQ file using the ``-i`` option.
 
 ### Input reference
 
@@ -210,7 +193,7 @@ options:
         -e VAL  size of hash used by jellyfish (default: 3000000000).
         -f VAL  Filename prefix of files computed by PanGenie-index (i.e. option -o used with PanGenie-index).
         -g      run genotyping (Forward backward algorithm, default behaviour)
-        -i VAL  sequencing reads in FASTA/FASTQ format or Jellyfish database in jf format or KFF database in kff format. NOTE: INPUT FASTA/Q FILE MUST NOT BE COMPRESSED.
+        -i VAL  sequencing reads in FASTA/FASTQ format or Jellyfish database in jf format. NOTE: INPUT FASTA/Q FILE MUST NOT BE COMPRESSED.
         -j VAL  number of threads to use for kmer-counting (default: 1).
         -k VAL  kmer size (default: 31).
         -o VAL  prefix of the output files. NOTE: the given path must not include non-existent folders (default: result).
@@ -227,9 +210,6 @@ options:
 ```
 
 The result will be a VCF file containing genotypes of the sample for the variants provided in the input VCF. Per default, the name of the output VCF is `` result_genotyping.vcf ``. You can specify the prefix of the output file using option ``-o <prefix>``, i.e. the output file will be named as ``<prefix>_genotyping.vcf ``.
-
-**Note:** When using KFF files, ensure KFF support was enabled during build (``cmake -DENABLE_KFF_SUPPORT=ON``). KFF files are automatically detected by their .kff extension and provide equivalent functionality to Jellyfish .jf files.
-
 The full list of options is provided below.
 
 If you want to genotype the same set of variants across more than one sample, run the command above separately on each sample. The preprocessing step only needs to be run once (as long as the VCF does not change).
